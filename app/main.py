@@ -1,26 +1,30 @@
-from app.core.lifecycle import ApplicationLifecycle
+from app.container import build_container
 from app.core.logger import logger
-from app.core.config import settings
+
 
 def main() -> None:
-    """
-    Main application entry point.
-    """
-
-    lifecycle = ApplicationLifecycle()
+    container = build_container()
+    container.lifecycle.startup()
 
     try:
-        lifecycle.startup()
+        while True:
+            container.wake_engine.wait_for_wake(
+                idle_hook=container.reminders.check_and_notify,
+                idle_interval=60.0,
+            )
 
-        logger.info(
-            f"{settings.app_name} v{settings.app_version} is ready."
-        )
+            if not container.store.briefing_done_today():
+                container.tts.speak(container.briefing.build_morning_briefing())
+                container.store.mark_briefing_done()
 
-    except Exception as e:
-        logger.error(f"Application error: {e}")
+            container.conversation.run()
+
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user.")
 
     finally:
-        lifecycle.shutdown()
+        container.lifecycle.shutdown()
+
 
 if __name__ == "__main__":
     main()
