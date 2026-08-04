@@ -55,3 +55,11 @@ def test_email_state_roundtrip(store):
     assert store.get_last_seen_email_id() is None
     store.set_last_seen_email_id("12345")
     assert store.get_last_seen_email_id() == "12345"
+
+
+def test_deadline_notification_state(store):
+    deadline = store.add_deadline("Standup", "2026-08-05", "09:30")
+    assert store.deadline_notified(deadline.id) is False
+    store.mark_deadline_notified(deadline.id)
+    assert store.deadline_notified(deadline.id) is True
+    assert store.deadline_notified("missing-id") is False

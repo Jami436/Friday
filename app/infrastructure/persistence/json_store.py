@@ -112,6 +112,21 @@ class JsonMemoryStore(MemoryStore):
                     due.append(Deadline(**{k: d[k] for k in ("id", "title", "due", "time", "done", "source", "created")}))
         return due
 
+    def deadline_notified(self, deadline_id: str) -> bool:
+        with self._lock:
+            for d in self._data["deadlines"]:
+                if d["id"] == deadline_id:
+                    return bool(d.get("notified", False))
+            return False
+
+    def mark_deadline_notified(self, deadline_id: str) -> None:
+        with self._lock:
+            for d in self._data["deadlines"]:
+                if d["id"] == deadline_id:
+                    d["notified"] = True
+                    self._save()
+                    return
+
     def add_note(self, text: str) -> Note:
         with self._lock:
             note = Note(id=str(uuid.uuid4()), text=text, created=self._now_iso())

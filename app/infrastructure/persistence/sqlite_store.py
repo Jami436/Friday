@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS deadlines (
     due TEXT NOT NULL,
     time TEXT NOT NULL DEFAULT '',
     done INTEGER NOT NULL DEFAULT 0,
+    notified INTEGER NOT NULL DEFAULT 0,
     source TEXT NOT NULL DEFAULT 'voice',
     created TEXT NOT NULL
 );
@@ -37,6 +38,10 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_deadlines_due ON deadlines(due);
+CREATE INDEX IF NOT EXISTS idx_deadlines_done ON deadlines(done, due);
+CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
+CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created);
 """
 
 
@@ -47,11 +52,21 @@ class SqliteMemoryStore(MemoryStore):
         self._path = path
         self._clock = clock or SystemClock()
         self._lock = threading.RLock()
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=5000")
             self._conn.executescript(_SCHEMA)
+            self._migrate()
             self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after the initial schema without data loss."""
+        deadline_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(deadlines)")}
+        if "notified" not in deadline_cols:
+            self._conn.execute("ALTER TABLE deadlines ADD COLUMN notified INTEGER NOT NULL DEFAULT 0")
 
     def _now_iso(self) -> str:
         return self._clock.now().isoformat(timespec="seconds")
@@ -140,6 +155,20 @@ class SqliteMemoryStore(MemoryStore):
                 if -90 <= delta <= minutes * 60:
                     due.append(deadline)
         return due
+
+    def deadline_notified(self, deadline_id: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT notified FROM deadlines WHERE id = ?", (deadline_id,)
+            ).fetchone()
+            return bool(row["notified"]) if row else False
+
+    def mark_deadline_notified(self, deadline_id: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE deadlines SET notified = 1 WHERE id = ?", (deadline_id,)
+            )
+            self._conn.commit()
 
     # ---- notes ----
 

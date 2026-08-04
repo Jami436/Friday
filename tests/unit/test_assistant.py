@@ -108,7 +108,7 @@ def test_conversation_speaks_confirmation_after_reply(components):
     assert "Submit report" in tts.spoken[2]
 
 
-def test_reminder_speaks_each_deadline_once(components):
+def test_reminder_speaks_each_deadline_once(components, tmp_path):
     store, clock, email, tts = (
         components["store"], components["clock"], components["email"], components["tts"],
     )
@@ -118,3 +118,28 @@ def test_reminder_speaks_each_deadline_once(components):
     assert reminders.check_and_notify(minutes=10) == 1
     assert reminders.check_and_notify(minutes=10) == 0  # not repeated
     assert len(tts.spoken) == 1
+
+
+def test_reminder_notification_persists_across_restarts(components, tmp_path):
+    from pathlib import Path
+
+    from app.application.reminder_service import ReminderService
+    path = tmp_path / "restart.db"
+    clock = FakeClock()
+    tts = FakeTTS()
+
+    first_store = SqliteMemoryStore(path, clock=clock)
+    deadline = first_store.add_deadline("Standup", clock.now().strftime("%Y-%m-%d"), clock.now().strftime("%H:%M"))
+    first_store.close()
+
+    second_store = SqliteMemoryStore(path, clock=clock)
+    second_tts = FakeTTS()
+    reminders = ReminderService(store=second_store, tts=second_tts, clock=clock)
+    assert reminders.check_and_notify(minutes=10) == 1
+    assert len(second_tts.spoken) == 1
+
+    third_tts = FakeTTS()
+    reminders_again = ReminderService(store=second_store, tts=third_tts, clock=clock)
+    assert reminders_again.check_and_notify(minutes=10) == 0  # persisted, not re-spoken
+    assert len(third_tts.spoken) == 0
+    second_store.close()

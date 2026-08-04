@@ -12,15 +12,18 @@ class ReminderService:
         self._store = store
         self._tts = tts
         self._clock = clock
-        self._notified: set[str] = set()
 
     def check_and_notify(self, minutes: int = 10) -> int:
-        """Speak a reminder for each newly-due deadline; returns how many were spoken."""
+        """Speak a reminder for each newly-due deadline; returns how many were spoken.
+
+        Notification state is persisted in the store, so a deadline is announced
+        exactly once even across application restarts.
+        """
         count = 0
         for deadline in self._store.deadlines_due_within(minutes):
-            if deadline.id in self._notified:
+            if self._store.deadline_notified(deadline.id):
                 continue
-            self._notified.add(deadline.id)
+            self._store.mark_deadline_notified(deadline.id)
             logger.info(f"Reminder spoken: {deadline.title}")
             self._tts.speak(f"Boss, a reminder: {deadline.title} is due soon.")
             count += 1
