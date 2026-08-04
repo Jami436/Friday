@@ -91,4 +91,5 @@ python -m pytest
 ## Notes
 
 - Run with `python -m app.main` from the project root, not `python app/main.py`.
-- No ElevenLabs key? FRIDAY falls back to console mode (prints instead of speaking).
+- No ElevenLabs key? FRIDAY falls back to the built-in Windows voice (SAPI,
+  female), and finally to console output if speech synthesis is unavailable.
