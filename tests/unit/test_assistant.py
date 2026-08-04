@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 import numpy as np
 import pytest
@@ -7,6 +7,7 @@ from app.application.assistant_service import AssistantService
 from app.application.briefing_service import BriefingService
 from app.application.conversation_service import ConversationService
 from app.application.memory_extractor import MemoryExtractor
+from app.application.reminder_service import ReminderService
 from app.infrastructure.persistence.sqlite_store import SqliteMemoryStore
 from tests.fakes import FakeAIProvider, FakeClock, FakeEmailProvider, FakeSTT, FakeTTS, FakeVAD, FakeWakeEngine
 
@@ -112,7 +113,6 @@ def test_reminder_speaks_each_deadline_once(components, tmp_path):
     store, clock, email, tts = (
         components["store"], components["clock"], components["email"], components["tts"],
     )
-    from app.application.reminder_service import ReminderService
     store.add_deadline("Standup", clock.now().strftime("%Y-%m-%d"), clock.now().strftime("%H:%M"))
     reminders = ReminderService(store=store, tts=tts, clock=clock)
     assert reminders.check_and_notify(minutes=10) == 1
@@ -121,9 +121,6 @@ def test_reminder_speaks_each_deadline_once(components, tmp_path):
 
 
 def test_reminder_notification_persists_across_restarts(components, tmp_path):
-    from pathlib import Path
-
-    from app.application.reminder_service import ReminderService
     path = tmp_path / "restart.db"
     clock = FakeClock()
     tts = FakeTTS()
@@ -143,3 +140,30 @@ def test_reminder_notification_persists_across_restarts(components, tmp_path):
     assert reminders_again.check_and_notify(minutes=10) == 0  # persisted, not re-spoken
     assert len(third_tts.spoken) == 0
     second_store.close()
+
+
+def _make_briefing_store(path, clock):
+    store = SqliteMemoryStore(path, clock=clock)
+    return store, BriefingService(store=store, email=FakeEmailProvider(), clock=clock)
+
+
+def test_briefing_evening_greeting(tmp_path):
+    clock = FakeClock(now=datetime(2026, 8, 3, 19, 4))
+    store, briefing = _make_briefing_store(tmp_path / "briefing.db", clock)
+    text = briefing.build_morning_briefing()
+    assert "Good evening, Boss" in text
+    assert "7:04 PM" in text
+    store.close()
+
+
+def test_briefing_morning_greeting_and_daily_context(tmp_path):
+    clock = FakeClock(now=datetime(2026, 8, 3, 9, 0))
+    store, briefing = _make_briefing_store(tmp_path / "briefing2.db", clock)
+    store.add_deadline("Pay rent", "2026-08-03")
+    text = briefing.build_morning_briefing()
+    assert "Good morning, Boss" in text
+    assert "Pay rent" in text
+    context = briefing.build_daily_context()
+    assert "Pay rent" in context
+    assert "due TODAY" in context
+    store.close()

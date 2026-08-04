@@ -1,12 +1,8 @@
 """Application service: assembles FRIDAY's working context and morning briefing."""
-from datetime import date
-
-from app.core.logger import logger
-from app.domain.entities.email import EmailMessage
 from app.domain.ports.clock import Clock
 from app.domain.ports.email import EmailProvider
 from app.domain.ports.memory import MemoryStore
-from app.domain.services.time_format import format_now
+from app.domain.services.time_format import format_now, time_of_day
 
 
 class BriefingService:
@@ -35,7 +31,7 @@ class BriefingService:
             parts.append("Pending tasks:")
             parts.extend(f"- {task.title}" for task in tasks)
 
-        today = date.today()
+        today = self._clock.now().date()
         due_today = self._store.deadlines_due_on(today)
         if due_today:
             parts.append("Deadlines due TODAY:")
@@ -62,10 +58,9 @@ class BriefingService:
     def build_morning_briefing(self) -> str:
         """Spoken text for the first wake of the day."""
         now = self._clock.now()
-        today = date.today()
+        today = now.date()
 
-        greeting = "morning" if now.hour < 12 else "afternoon"
-        parts = [f"Good {greeting}, Boss. It's {format_now(now)}."]
+        parts = [f"Good {time_of_day(now)}, Boss. It's {format_now(now)}."]
 
         due_today = self._store.deadlines_due_on(today)
         if due_today:
