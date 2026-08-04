@@ -1,7 +1,8 @@
 """Application service: the FRIDAY assistant use case."""
+from dataclasses import dataclass, field
+
 from app.application.briefing_service import BriefingService
 from app.application.memory_extractor import MemoryExtractor
-from app.core.logger import logger
 from app.domain.entities.conversation import ChatMessage
 from app.domain.ports.ai import AIProvider
 from app.domain.ports.clock import Clock
@@ -9,6 +10,14 @@ from app.domain.ports.memory import MemoryStore
 from app.domain.services.persona import build_system_prompt
 
 MAX_HISTORY_TURNS = 10
+
+
+@dataclass
+class AssistantReply:
+    """The assistant's spoken reply plus any actions it performed."""
+
+    text: str
+    confirmations: list[str] = field(default_factory=list)
 
 
 class AssistantService:
@@ -51,13 +60,12 @@ class AssistantService:
                     confirmations.append("Noted.")
         return confirmations
 
-    def respond(self, user_text: str) -> str:
+    def respond(self, user_text: str) -> AssistantReply:
         self._history.append(ChatMessage(role="user", text=user_text))
         if len(self._history) > MAX_HISTORY_TURNS * 2:
             self._history = self._history[-MAX_HISTORY_TURNS * 2:]
 
-        for confirmation in self._apply_actions(user_text):
-            logger.info(confirmation)
+        confirmations = self._apply_actions(user_text)
 
         system = build_system_prompt(
             daily_context=self._briefing.build_daily_context(),
@@ -69,7 +77,7 @@ class AssistantService:
             temperature=0.7,
         )
         self._history.append(ChatMessage(role="model", text=reply))
-        return reply
+        return AssistantReply(text=reply, confirmations=confirmations)
 
     def reset_history(self) -> None:
         self._history = []

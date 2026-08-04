@@ -5,6 +5,8 @@ from datetime import date
 
 from app.core.logger import logger
 from app.domain.ports.ai import AIProvider
+from app.domain.ports.clock import Clock
+from app.domain.services.clock import SystemClock
 
 EXTRACTOR_PROMPT = """You are a strict structured-data extractor. Today's date is {today}.
 
@@ -19,17 +21,91 @@ Rules:
 - Return ONLY a JSON array of actions, or [] if nothing qualifies. No prose, no markdown fences.
 """
 
+# Cheap pre-filter: if the request contains none of these cues, we skip the
+# expensive LLM extraction call entirely. Intentionally generous so real
+# requests are never missed; it only costs an AI round-trip on false positives.
+_ACTION_HINTS = (
+    # action verbs
+    "remind",
+    "reminder",
+    "remember",
+    "don't forget",
+    "deadline",
+    "due",
+    "task",
+    "to-do",
+    "todo",
+    "add",
+    "create",
+    "make",
+    "set up",
+    "set a",
+    "set an",
+    "schedule",
+    "book",
+    "plan",
+    "note",
+    "write down",
+    "jot",
+    "save",
+    "record",
+    # date/time references (implicit deadlines like "call mom tomorrow")
+    "tomorrow",
+    "tonight",
+    "today",
+    "next",
+    "weekend",
+    "this week",
+    "next week",
+    "o'clock",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "on the",
+    "at ",
+    "by ",
+    "in ",
+)
+
+_HINT_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(hint) for hint in _ACTION_HINTS) + r")",
+    re.IGNORECASE,
+)
+
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
 class MemoryExtractor:
     """Structured-action extraction; the provider is injected for testability."""
 
-    def __init__(self, ai: AIProvider) -> None:
+    def __init__(self, ai: AIProvider, clock: Clock | None = None) -> None:
         self._ai = ai
+        self._clock = clock or SystemClock()
+
+    def _should_extract(self, user_text: str) -> bool:
+        return bool(_HINT_RE.search(user_text))
 
     def extract(self, user_text: str) -> list[dict]:
-        prompt = EXTRACTOR_PROMPT.format(today=date.today().isoformat())
+        if not self._should_extract(user_text):
+            return []
+        today: date = self._clock.now().date()
+        prompt = EXTRACTOR_PROMPT.format(today=today.isoformat())
         raw = self._ai.generate_response(prompt + f"\nUser request: {user_text}").strip()
         fence = _FENCE_RE.search(raw)
         if fence:

@@ -57,5 +57,7 @@ class ConversationService:
                 return
 
             reply = self._assistant.respond(text)
-            if reply:
-                self._tts.speak(reply)
+            if reply.text:
+                self._tts.speak(reply.text)
+            for confirmation in reply.confirmations:
+                self._tts.speak(confirmation)

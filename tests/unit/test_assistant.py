@@ -40,6 +40,23 @@ def test_memory_extractor_tolerates_non_json(components):
     assert extractor.extract("What time is it?") == []
 
 
+def test_memory_extractor_skips_llm_for_non_action_requests(components):
+    ai = FakeAIProvider(queue=['[{"type": "deadline", "title": "Pay rent", "due": "2026-08-05"}]'])
+    extractor = MemoryExtractor(ai)
+    assert extractor.extract("Tell me a joke") == []
+    assert extractor.extract("How are you doing?") == []
+    assert ai.requests == []  # LLM never called
+
+
+def test_memory_extractor_uses_injected_clock_for_relative_dates(components):
+    clock = components["clock"]
+    ai = FakeAIProvider(queue=['[{"type": "deadline", "title": "Pay rent", "due": "2026-08-04"}]'])
+    extractor = MemoryExtractor(ai, clock=clock)
+    actions = extractor.extract("Remind me to pay rent tomorrow")
+    assert actions == [{"type": "deadline", "title": "Pay rent", "due": "2026-08-04"}]
+    assert "2026-08-03" in ai.requests[0]  # today from clock, not date.today()
+
+
 def test_assistant_persists_deadline(components):
     store, clock, email = components["store"], components["clock"], components["email"]
     ai = FakeAIProvider(
@@ -49,7 +66,8 @@ def test_assistant_persists_deadline(components):
     briefing = BriefingService(store=store, email=email, clock=clock)
     assistant = AssistantService(ai=ai, store=store, briefing=briefing, clock=clock)
     reply = assistant.respond("Set a deadline for the report on August 10th")
-    assert "Boss" in reply
+    assert "Boss" in reply.text
+    assert "Submit report" in reply.confirmations[0]
     assert store.deadlines_due_on(date(2026, 8, 10))[0].title == "Submit report"
 
 
@@ -66,6 +84,28 @@ def test_conversation_goodbye_returns(components):
     conversation.run()
     assert tts.spoken[0] == "Yes, Boss?"
     assert "Right away" in tts.spoken[-1]
+
+
+def test_conversation_speaks_confirmation_after_reply(components):
+    store, clock, email, tts = (
+        components["store"], components["clock"], components["email"], components["tts"],
+    )
+    ai = FakeAIProvider(
+        queue=['[{"type": "deadline", "title": "Submit report", "due": "2026-08-10"}]'],
+        default="Done, Boss.",
+    )
+    briefing = BriefingService(store=store, email=email, clock=clock)
+    assistant = AssistantService(ai=ai, store=store, briefing=briefing, clock=clock)
+    conversation = ConversationService(
+        assistant=assistant,
+        tts=tts,
+        stt=FakeSTT(["Set a deadline for the report on August 10th", "goodbye"]),
+        vad=FakeVAD(),
+        clock=clock,
+    )
+    conversation.run()
+    assert tts.spoken[1] == "Done, Boss."
+    assert "Submit report" in tts.spoken[2]
 
 
 def test_reminder_speaks_each_deadline_once(components):

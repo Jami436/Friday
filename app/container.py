@@ -140,7 +140,7 @@ def build_container(settings: Settings | None = None, **overrides) -> Container:
 
     components.update(overrides)
 
-    components["extractor"] = MemoryExtractor(components["ai"])
+    components["extractor"] = MemoryExtractor(components["ai"], clock=components["clock"])
     components["briefing"] = BriefingService(
         store=components["store"], email=components["email"], clock=components["clock"]
     )

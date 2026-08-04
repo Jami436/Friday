@@ -30,7 +30,7 @@ def test_container_exposes_wired_services(container):
 
 def test_container_assistant_round_trip(container):
     reply = container.assistant.respond("Hello")
-    assert reply
+    assert reply.text
 
 
 def test_container_store_persists(container, tmp_path):
