@@ -72,6 +72,26 @@ Copy `.env.example` to `.env` and fill in:
 | `ELEVENLABS_API_KEY` | Voice output (elevenlabs.io/api-keys) |
 | `ELEVENLABS_VOICE_ID` | Optional; empty = auto-pick a British female voice |
 | `GMAIL_USER` / `GMAIL_APP_PASSWORD` | Optional email reading (enable 2FA, create an App Password) |
+| `OWNER_NAME` | The owner FRIDAY addresses (default `Boss`) |
+| `SECURITY_ENABLED` | Gate the assistant behind owner verification (`True`/`False`) |
+| `SECURITY_MODE` | `voice` (biometrics), `passphrase`, or `both` |
+| `SECURITY_PASSPHRASE` | Spoken passphrase for `passphrase`/`both` mode |
+| `SPEAKER_THRESHOLD` | Voice-match strictness (0.0–1.0, default `0.72`) |
+
+### Owner security (per-installation)
+
+Only the person who set up this machine can control it. On your machine you are
+the owner; anyone else who clones this project on their own machine becomes the
+owner of that copy. Ownership is bound to local data: a voice profile and/or
+passphrase stored under `data/memory/`, plus your `.env` credentials.
+
+```powershell
+python scripts\download_vosk_model.py --speaker   # fetch the speaker model (~14MB)
+python scripts\enroll_voice.py --samples 5        # enroll your voice
+```
+
+With `SECURITY_ENABLED=True`, FRIDAY verifies the speaker after every wake
+before the briefing or any conversation, and says "Access denied" otherwise.
 
 ## Run
 

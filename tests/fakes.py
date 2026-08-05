@@ -8,6 +8,7 @@ from app.domain.entities.conversation import ChatMessage
 from app.domain.entities.email import EmailMessage
 from app.domain.ports.ai import AIProvider
 from app.domain.ports.clock import Clock
+from app.domain.ports.security import PassphraseStore, SpeakerVerifier
 from app.domain.ports.speech import TextToSpeech, WakeEngine
 
 
@@ -85,3 +86,33 @@ class FakeVAD:
         if self._empty.pop(0) if self._empty else False:
             return np.array([], dtype=np.int16)
         return np.zeros(1600, dtype=np.int16)
+
+
+class FakeSpeakerVerifier(SpeakerVerifier):
+    """Scripted speaker verifier; controls the returned similarity score."""
+
+    def __init__(self, score: float = 0.9, enrolled: bool = True) -> None:
+        self._score = score
+        self._enrolled = enrolled
+        self.enrolled_samples: list[np.ndarray] = []
+
+    def is_enrolled(self) -> bool:
+        return self._enrolled
+
+    def enroll(self, samples: list[np.ndarray]) -> None:
+        self._enrolled = True
+        self.enrolled_samples.extend(samples)
+
+    def verify(self, audio: np.ndarray) -> float:
+        return self._score
+
+
+class FakePassphraseStore(PassphraseStore):
+    def __init__(self, passphrase: str = "") -> None:
+        self._passphrase = passphrase
+
+    def get(self) -> str:
+        return self._passphrase
+
+    def set(self, passphrase: str) -> None:
+        self._passphrase = passphrase

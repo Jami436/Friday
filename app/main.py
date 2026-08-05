@@ -13,6 +13,10 @@ def main() -> None:
                 idle_interval=60.0,
             )
 
+            if not container.access_control.authorize():
+                logger.info("Owner verification failed; returning to idle.")
+                continue
+
             if not container.store.briefing_done_today():
                 container.tts.speak(container.briefing.build_morning_briefing())
                 container.store.mark_briefing_done()

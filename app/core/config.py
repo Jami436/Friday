@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     listen_max_sec: float = 12.0
     listen_silence_sec: float = 1.2
 
+    # Security / owner identity (per-installation: each machine's owner binds
+    # their own voice enrollment + passphrase in their local setup)
+    owner_name: str = "Boss"
+    security_enabled: bool = False
+    security_mode: str = "voice"  # voice | passphrase | both
+    security_passphrase: str = ""
+    speaker_threshold: float = 0.72
+
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from app.application.access_control import AccessControlService
 from app.application.assistant_service import AssistantService
 from app.application.briefing_service import BriefingService
 from app.application.conversation_service import ConversationService
@@ -23,6 +24,7 @@ from app.domain.ports.audio import AudioOutput, AudioStream
 from app.domain.ports.clock import Clock
 from app.domain.ports.email import EmailProvider
 from app.domain.ports.memory import MemoryStore
+from app.domain.ports.security import PassphraseStore, SpeakerVerifier
 from app.domain.ports.speech import SpeechToText, TextToSpeech, VoiceActivityDetector, WakeDetector, WakeEngine
 from app.domain.services.clock import SystemClock
 from app.infrastructure.ai.gemini_adapter import GeminiAdapter
@@ -34,6 +36,8 @@ from app.infrastructure.audio.wake_engine import SounddeviceWakeEngine
 from app.infrastructure.email.gmail_imap import GmailImapAdapter
 from app.infrastructure.persistence.json_store import JsonMemoryStore
 from app.infrastructure.persistence.sqlite_store import SqliteMemoryStore
+from app.infrastructure.security.passphrase_store import FilePassphraseStore
+from app.infrastructure.security.vosk_speaker import VoskSpeakerVerifier
 from app.infrastructure.speech.console_tts import ConsoleTextToSpeech
 from app.infrastructure.speech.elevenlabs_tts import ElevenLabsTextToSpeech
 from app.infrastructure.speech.local_tts import SystemSpeechTextToSpeech
@@ -61,6 +65,9 @@ class Container:
     assistant: AssistantService
     reminders: ReminderService
     conversation: ConversationService
+    verifier: SpeakerVerifier
+    passphrase_store: PassphraseStore
+    access_control: AccessControlService
 
 
 def _build_ai(settings: Settings) -> AIProvider:
@@ -160,6 +167,21 @@ def build_container(settings: Settings | None = None, **overrides) -> Container:
         stt=components["stt"],
         vad=components["vad"],
         clock=components["clock"],
+    )
+    components["verifier"] = VoskSpeakerVerifier()
+    components["passphrase_store"] = FilePassphraseStore()
+    components["access_control"] = AccessControlService(
+        verifier=components["verifier"],
+        passphrase_store=components["passphrase_store"],
+        vad=components["vad"],
+        stt=components["stt"],
+        tts=components["tts"],
+        clock=components["clock"],
+        enabled=config.security_enabled,
+        mode=config.security_mode,
+        threshold=config.speaker_threshold,
+        passphrase=config.security_passphrase,
+        owner_name=config.owner_name,
     )
 
     return Container(**components)
