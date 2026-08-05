@@ -9,23 +9,25 @@ FRIDAY runs fully hands-free on your PC:
 - Always knows the time (AM/PM), your tasks, deadlines, notes and recent emails.
 - Gives a morning briefing on your first wake of the day and nudges you when a
   deadline is approaching.
+- **Owner-locked**: only the person who set it up can control it, verified by
+  voice biometrics and/or a spoken passphrase.
 
 ## Architecture
 
 Hexagonal (Ports & Adapters). Dependencies always point **inward**:
 
 ```
-entrypoints (main.py, future API/CLI)
+entrypoints (main.py, scripts/enroll_voice.py, future API/CLI)
         │
         ▼
-app/application   use cases (Assistant, Briefing, Reminder, Conversation)
+app/application   use cases (Assistant, Briefing, Reminder, Conversation, AccessControl)
         │
         ▼
 app/domain        entities, ports (interfaces), services — pure, no I/O
         │
         ▼
 app/infrastructure adapters (Gemini, Vosk, ElevenLabs, Sounddevice, Gmail,
-                   SQLite/JSON stores)
+                   SQLite/JSON stores, speaker verification, passphrase store)
         ▲
 app/container.py  Composition Root — the only place wiring ports to adapters
 ```
@@ -34,22 +36,25 @@ Rules enforced by structure:
 - `application` and `domain` never import `infrastructure`.
 - Providers are swappable: `AI_PROVIDER=gemini|local`, `MEMORY_BACKEND=sqlite|json`.
 - Every I/O capability sits behind a port (`domain/ports/`), so tests inject fakes
-  (`tests/fakes.py`).
+  (`tests/fakes.py`). Owner auth uses `SpeakerVerifier` and `PassphraseStore` ports.
 
 ```
 always-on mic
     │  two-clap detector (local audio analysis)
     │  "Friday" keyword spotter (offline Vosk)
     ▼
-wake  ──►  record utterance (VAD) ──► Vosk STT
+wake  ──►  owner verification (voice biometrics / passphrase)  ──►  denied? back to idle
+            │
+            ▼
+        record utterance (VAD) ──► Vosk STT
                                           │  text
                                           ▼
                           FRIDAY brain (Gemini)  persona + "Boss" + AM/PM + daily matters
                                           │  reply
                                           ▼
-                          ElevenLabs TTS ──► speaker
+                          ElevenLabs TTS (→ Windows SAPI fallback) ──► speaker
 
-persistent store (SQLite at data/memory/friday.db): tasks, deadlines, notes
+persistent store (SQLite at data/memory/friday.db): tasks, deadlines, notes, owner profile
 Gmail over IMAP (App Password): reads & summarizes inbox
 ```
 
@@ -59,7 +64,7 @@ Gmail over IMAP (App Password): reads & summarizes inbox
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python scripts\download_vosk_model.py     # downloads the offline wake/STT model
+python scripts\download_vosk_model.py --speaker   # offline wake/STT model + speaker model
 ```
 
 Copy `.env.example` to `.env` and fill in:
