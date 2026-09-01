@@ -1,4 +1,5 @@
 """Application service: assembles FRIDAY's working context and morning briefing."""
+from app.domain.entities.email import EmailMessage
 from app.domain.ports.clock import Clock
 from app.domain.ports.email import EmailProvider
 from app.domain.ports.memory import MemoryStore
@@ -21,6 +22,23 @@ class BriefingService:
         for message in emails[:limit]:
             lines.append(f"- {message.subject} (from {message.sender}, {message.date})")
         return lines
+
+    def _new_emails_since_last_seen(self) -> list[EmailMessage]:
+        """Emails the user hasn't heard about yet, based on the last UID we surfaced."""
+        emails = self._email.fetch_recent(days=3, limit=15)
+        if not emails:
+            return []
+        last_seen = self._store.get_last_seen_email_id()
+        if last_seen is None:
+            return emails
+        for index, message in enumerate(emails):
+            if message.uid == last_seen:
+                return emails[:index]
+        return emails
+
+    def _track_last_seen_email(self, emails: list[EmailMessage]) -> None:
+        if emails:
+            self._store.set_last_seen_email_id(emails[0].uid)
 
     def build_daily_context(self) -> str:
         """Authoritative daily-matters summary injected into the system prompt."""
@@ -73,11 +91,15 @@ class BriefingService:
         if tasks:
             parts.append(f"You also have {len(tasks)} task{'s' if len(tasks) != 1 else ''} on your list.")
 
-        emails = self._email.fetch_recent(days=3, limit=15)
-        if emails:
-            count = len(emails)
-            parts.append(f"And there {'are' if count != 1 else 'is'} {count} unread email{'s' if count != 1 else ''} in your inbox.")
-            parts.append(f"The most recent one is '{emails[0].subject}'.")
+        new_emails = self._new_emails_since_last_seen()
+        if new_emails:
+            count = len(new_emails)
+            parts.append(
+                f"And there {'are' if count != 1 else 'is'} {count} new unread "
+                f"email{'s' if count != 1 else ''} since you last checked."
+            )
+            parts.append(f"The most recent one is '{new_emails[0].subject}'.")
+            self._track_last_seen_email(new_emails)
 
         parts.append("Ready when you are, Boss.")
         return " ".join(parts)

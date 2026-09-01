@@ -8,3 +8,6 @@ class ConsoleTextToSpeech(TextToSpeech):
 
     def speak(self, text: str) -> None:
         logger.info(f"[FRIDAY] {text}")
+
+    def cancel(self) -> None:
+        pass

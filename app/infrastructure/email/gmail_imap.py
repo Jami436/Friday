@@ -5,7 +5,6 @@ import re
 from datetime import datetime, timedelta
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
-from typing import Optional
 
 from app.core.logger import logger
 from app.domain.entities.email import EmailMessage
@@ -59,8 +58,8 @@ class GmailImapAdapter(EmailProvider):
 
     def __init__(
         self,
-        user: Optional[str] = None,
-        app_password: Optional[str] = None,
+        user: str | None = None,
+        app_password: str | None = None,
     ) -> None:
         self._user = user
         self._app_password = app_password

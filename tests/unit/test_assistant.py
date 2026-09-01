@@ -1,6 +1,5 @@
 from datetime import date, datetime
 
-import numpy as np
 import pytest
 
 from app.application.assistant_service import AssistantService
@@ -9,7 +8,7 @@ from app.application.conversation_service import ConversationService
 from app.application.memory_extractor import MemoryExtractor
 from app.application.reminder_service import ReminderService
 from app.infrastructure.persistence.sqlite_store import SqliteMemoryStore
-from tests.fakes import FakeAIProvider, FakeClock, FakeEmailProvider, FakeSTT, FakeTTS, FakeVAD, FakeWakeEngine
+from tests.fakes import FakeAIProvider, FakeClock, FakeEmailProvider, FakeSTT, FakeTTS, FakeVAD
 
 
 @pytest.fixture
@@ -110,8 +109,8 @@ def test_conversation_speaks_confirmation_after_reply(components):
 
 
 def test_reminder_speaks_each_deadline_once(components, tmp_path):
-    store, clock, email, tts = (
-        components["store"], components["clock"], components["email"], components["tts"],
+    store, clock, tts = (
+        components["store"], components["clock"], components["tts"],
     )
     store.add_deadline("Standup", clock.now().strftime("%Y-%m-%d"), clock.now().strftime("%H:%M"))
     reminders = ReminderService(store=store, tts=tts, clock=clock)
@@ -123,10 +122,9 @@ def test_reminder_speaks_each_deadline_once(components, tmp_path):
 def test_reminder_notification_persists_across_restarts(components, tmp_path):
     path = tmp_path / "restart.db"
     clock = FakeClock()
-    tts = FakeTTS()
 
     first_store = SqliteMemoryStore(path, clock=clock)
-    deadline = first_store.add_deadline("Standup", clock.now().strftime("%Y-%m-%d"), clock.now().strftime("%H:%M"))
+    first_store.add_deadline("Standup", clock.now().strftime("%Y-%m-%d"), clock.now().strftime("%H:%M"))
     first_store.close()
 
     second_store = SqliteMemoryStore(path, clock=clock)

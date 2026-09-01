@@ -37,10 +37,13 @@ class AssistantService:
         self._clock = clock
         self._extractor = extractor or MemoryExtractor(ai)
         self._history: list[ChatMessage] = []
+        self._last_actions = False
 
     def _apply_actions(self, user_text: str) -> list[str]:
         confirmations: list[str] = []
-        for action in self._extractor.extract(user_text):
+        actions = self._extractor.extract(user_text)
+        self._last_actions = bool(actions)
+        for action in actions:
             action_type = action.get("type")
             if action_type == "deadline":
                 title = (action.get("title") or "").strip()
@@ -58,7 +61,92 @@ class AssistantService:
                 if text:
                     self._store.add_note(text)
                     confirmations.append("Noted.")
+            elif action_type == "complete":
+                title = (action.get("title") or "").strip()
+                target = (action.get("target") or "task").strip().lower()
+                if title:
+                    found = False
+                    if target == "deadline":
+                        item_id = self._find_deadline_id(title)
+                        if item_id is not None:
+                            found = self._store.complete_deadline(item_id)
+                    else:
+                        item_id = self._find_task_id(title)
+                        if item_id is not None:
+                            found = self._store.complete_task(item_id)
+                    if found:
+                        confirmations.append(f"Marked '{title}' complete.")
+                    else:
+                        kind = "deadline" if target == "deadline" else "task"
+                        confirmations.append(f"I couldn't find a matching {kind} for '{title}'.")
+            elif action_type == "delete":
+                title = (action.get("title") or "").strip()
+                target = (action.get("target") or "task").strip().lower()
+                if title:
+                    found = False
+                    if target == "deadline":
+                        item_id = self._find_deadline_id(title)
+                        if item_id is not None:
+                            found = self._store.delete_deadline(item_id)
+                    else:
+                        item_id = self._find_task_id(title)
+                        if item_id is not None:
+                            found = self._store.delete_task(item_id)
+                    if found:
+                        confirmations.append(f"Deleted {target} '{title}'.")
+                    else:
+                        kind = "deadline" if target == "deadline" else "task"
+                        confirmations.append(f"I couldn't find a matching {kind} for '{title}'.")
+            elif action_type == "reschedule":
+                title = (action.get("title") or "").strip()
+                due = action.get("due") or ""
+                if title and due:
+                    item_id = self._find_deadline_id(title)
+                    found = (
+                        self._store.reschedule_deadline(
+                            item_id, due, (action.get("time") or "") or ""
+                        )
+                        if item_id is not None
+                        else False
+                    )
+                    if found:
+                        confirmations.append(f"Rescheduled '{title}' to {due}.")
+                    else:
+                        confirmations.append(f"I couldn't find a matching deadline for '{title}'.")
+            elif action_type == "list":
+                target = (action.get("target") or "").strip().lower()
+                confirmations.append(self._format_listing(target))
         return confirmations
+
+    def _find_task_id(self, title: str) -> str | None:
+        norm = title.lower().strip()
+        for task in self._store.pending_tasks():
+            if norm in task.title.lower() or task.title.lower() in norm:
+                return task.id
+        return None
+
+    def _find_deadline_id(self, title: str) -> str | None:
+        norm = title.lower().strip()
+        for deadline in self._store.upcoming_deadlines(50):
+            if norm in deadline.title.lower() or deadline.title.lower() in norm:
+                return deadline.id
+        return None
+
+    def _format_listing(self, target: str) -> str:
+        tasks = self._store.pending_tasks()
+        deadlines = self._store.upcoming_deadlines(20)
+        parts: list[str] = []
+        if target in ("", "task") and tasks:
+            items = "; ".join(f"{task.title}" for task in tasks)
+            parts.append(f"You have {len(tasks)} pending task{'s' if len(tasks) != 1 else ''}: {items}.")
+        elif target == "task":
+            parts.append("You have no pending tasks.")
+        if target in ("", "deadline") and deadlines:
+            items = "; ".join(f"{d.title} ({d.due}{f' at {d.time}' if d.time else ''})" for d in deadlines)
+            parts.append(f"You have {len(deadlines)} upcoming deadline{'s' if len(deadlines) != 1 else ''}: {items}.")
+        elif target == "deadline":
+            parts.append("You have no upcoming deadlines.")
+        return " ".join(parts) or "There is nothing on your list right now."
 
     def respond(self, user_text: str) -> AssistantReply:
         self._history.append(ChatMessage(role="user", text=user_text))

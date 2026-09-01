@@ -11,6 +11,8 @@ FRIDAY runs fully hands-free on your PC:
   deadline is approaching.
 - **Owner-locked**: only the person who set it up can control it, verified by
   voice biometrics and/or a spoken passphrase.
+- **By voice you can add, complete, delete, reschedule and list** your tasks and
+  deadlines, and jot notes.
 
 ## Architecture
 
@@ -76,6 +78,7 @@ Copy `.env.example` to `.env` and fill in:
 | `MEMORY_BACKEND` | `sqlite` (default) or `json` |
 | `ELEVENLABS_API_KEY` | Voice output (elevenlabs.io/api-keys) |
 | `ELEVENLABS_VOICE_ID` | Optional; empty = auto-pick a British female voice |
+| `ELEVENLABS_STABILITY` / `ELEVENLABS_SIMILARITY_BOOST` | Optional voice tuning (0.0–1.0) |
 | `GMAIL_USER` / `GMAIL_APP_PASSWORD` | Optional email reading (enable 2FA, create an App Password) |
 | `OWNER_NAME` | The owner FRIDAY addresses (default `Boss`) |
 | `SECURITY_ENABLED` | Gate the assistant behind owner verification (`True`/`False`) |

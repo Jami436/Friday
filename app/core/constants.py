@@ -25,4 +25,4 @@ GOODBYE_HINTS = (
     "go offline",
 )
 
-WAKE_WORD_ONLY = {"friday", "hey friday", "friday friday", "friday ", " yes friday"}
+WAKE_WORD_ONLY = {"friday", "hey friday", "friday friday", "yes friday", "okay friday"}

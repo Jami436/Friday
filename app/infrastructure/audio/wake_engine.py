@@ -1,6 +1,7 @@
 """Wake engine adapter: combines clap + keyword detection on the live mic."""
+import threading
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from app.domain.ports.audio import AudioStream
 from app.domain.ports.speech import WakeDetector, WakeEngine
@@ -18,6 +19,11 @@ class SounddeviceWakeEngine(WakeEngine):
         self._stream_factory = stream_factory
         self._clap_factory = clap_detector_factory
         self._keyword_factory = keyword_spotter_factory
+        self._stop_event = threading.Event()
+
+    def close(self) -> None:
+        """Request an in-flight ``wait_for_wake`` to exit as soon as possible."""
+        self._stop_event.set()
 
     def wait_for_wake(
         self,
@@ -30,6 +36,8 @@ class SounddeviceWakeEngine(WakeEngine):
         last_hook = time.monotonic()
         try:
             for block in stream.read_blocks():
+                if self._stop_event.is_set():
+                    return ""
                 now = time.monotonic()
                 if idle_hook is not None and now - last_hook >= idle_interval:
                     stream.close()

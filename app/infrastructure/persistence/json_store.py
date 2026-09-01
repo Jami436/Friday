@@ -60,6 +60,47 @@ class JsonMemoryStore(MemoryStore):
                 if not t.get("done")
             ]
 
+    def complete_task(self, task_id: str) -> bool:
+        with self._lock:
+            for t in self._data["tasks"]:
+                if t["id"] == task_id and not t.get("done"):
+                    t["done"] = True
+                    self._save()
+                    return True
+            return False
+
+    def delete_task(self, task_id: str) -> bool:
+        with self._lock:
+            self._data["tasks"] = [t for t in self._data["tasks"] if t["id"] != task_id]
+            self._save()
+            return True
+
+    def complete_deadline(self, deadline_id: str) -> bool:
+        with self._lock:
+            for d in self._data["deadlines"]:
+                if d["id"] == deadline_id and not d.get("done"):
+                    d["done"] = True
+                    self._save()
+                    return True
+            return False
+
+    def delete_deadline(self, deadline_id: str) -> bool:
+        with self._lock:
+            self._data["deadlines"] = [d for d in self._data["deadlines"] if d["id"] != deadline_id]
+            self._save()
+            return True
+
+    def reschedule_deadline(self, deadline_id: str, due_date: str, due_time: str = "") -> bool:
+        with self._lock:
+            for d in self._data["deadlines"]:
+                if d["id"] == deadline_id:
+                    d["due"] = due_date
+                    d["time"] = due_time
+                    d["notified"] = False
+                    self._save()
+                    return True
+            return False
+
     def add_deadline(self, title: str, due_date: str, due_time: str = "") -> Deadline:
         with self._lock:
             deadline = Deadline(id=str(uuid.uuid4()), title=title, due=due_date, time=due_time, created=self._now_iso())
@@ -108,8 +149,9 @@ class JsonMemoryStore(MemoryStore):
                 except ValueError:
                     continue
                 delta = (due_dt - now).total_seconds()
+                keys = ("id", "title", "due", "time", "done", "source", "created")
                 if -90 <= delta <= minutes * 60:
-                    due.append(Deadline(**{k: d[k] for k in ("id", "title", "due", "time", "done", "source", "created")}))
+                    due.append(Deadline(**{k: d[k] for k in keys}))
         return due
 
     def deadline_notified(self, deadline_id: str) -> bool:

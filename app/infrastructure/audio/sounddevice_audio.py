@@ -1,4 +1,5 @@
 """Sounddevice adapters for the AudioStream and AudioOutput ports."""
+import contextlib
 import queue
 import threading
 
@@ -21,10 +22,8 @@ class SounddeviceMicrophone:
     def _callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
         if status:
             return
-        try:
+        with contextlib.suppress(queue.Full):
             self._queue.put_nowait(np.array(indata[:, 0], dtype=np.int16, copy=True))
-        except queue.Full:
-            pass
 
     def __enter__(self) -> "SounddeviceMicrophone":
         self._stop = threading.Event()
@@ -63,8 +62,10 @@ class SounddeviceAudioOutput:
 
     def __init__(self, device: int | None = None) -> None:
         self._device = device
+        self._stop_event = threading.Event()
 
     def play(self, pcm_chunks, sample_rate: int = TTS_SAMPLE_RATE) -> None:
+        self._stop_event.clear()
         with sd.OutputStream(
             samplerate=sample_rate,
             channels=1,
@@ -72,6 +73,12 @@ class SounddeviceAudioOutput:
             device=self._device,
         ) as stream:
             for chunk in pcm_chunks:
+                if self._stop_event.is_set():
+                    break
                 if isinstance(chunk, bytes):
                     chunk = np.frombuffer(chunk, dtype=np.int16)
                 stream.write(chunk)
+
+    def cancel(self) -> None:
+        """Request an in-flight ``play`` to stop at the next chunk boundary."""
+        self._stop_event.set()

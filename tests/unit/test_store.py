@@ -5,6 +5,11 @@ import pytest
 from app.infrastructure.persistence.json_store import JsonMemoryStore
 from app.infrastructure.persistence.sqlite_store import SqliteMemoryStore
 
+
+def _fixed_clock(now):
+    return type("Clock", (), {"now": lambda self: now})()
+
+
 PARAMS = [
     pytest.param(SqliteMemoryStore, id="sqlite"),
     pytest.param(JsonMemoryStore, id="json"),
@@ -15,7 +20,8 @@ PARAMS = [
 def store(tmp_path, request):
     store_cls = request.param
     path = tmp_path / ("store.db" if store_cls is SqliteMemoryStore else "store.json")
-    instance = store_cls(path)
+    clock = _fixed_clock(datetime(2026, 8, 3, 19, 4))
+    instance = store_cls(path, clock=clock)
     yield instance
     close = getattr(instance, "close", None)
     if close:
@@ -31,8 +37,9 @@ def test_add_and_list_deadlines(store):
 
 
 def test_deadlines_due_within_window(store):
-    soon = datetime.now().strftime("%Y-%m-%d")
-    store.add_deadline("Call boss", soon, datetime.now().strftime("%H:%M"))
+    now = store._clock.now()
+    soon = now.strftime("%Y-%m-%d")
+    store.add_deadline("Call boss", soon, now.strftime("%H:%M"))
     store.add_deadline("Far future", "2099-01-01")
     due = store.deadlines_due_within(minutes=10)
     assert [d.title for d in due] == ["Call boss"]

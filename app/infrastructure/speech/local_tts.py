@@ -36,3 +36,6 @@ class SystemSpeechTextToSpeech(TextToSpeech):
         if not text.strip():
             return
         self._engine.Speak(text)
+
+    def cancel(self) -> None:
+        self._engine.Speak("", 3)  # SVSFlagsAsync | SVPurgeBeforeSpeak

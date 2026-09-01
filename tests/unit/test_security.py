@@ -1,6 +1,5 @@
 """Tests for owner access control (voice + passphrase)."""
 import numpy as np
-import pytest
 
 from app.application.access_control import (
     SECURITY_MODE_BOTH,
@@ -64,25 +63,25 @@ def test_voice_denies_when_not_enrolled():
 
 def test_passphrase_grants_on_exact_normalized_match():
     store = FakePassphraseStore(passphrase="Iron Man")
-    gate, tts = make_access_control(mode=SECURITY_MODE_PASSPHRASE, passphrase_store=store, stt_texts=["iron man"])
+    gate, _ = make_access_control(mode=SECURITY_MODE_PASSPHRASE, passphrase_store=store, stt_texts=["iron man"])
     assert gate.authorize() is True
 
 
 def test_passphrase_denies_on_mismatch():
     store = FakePassphraseStore(passphrase="Iron Man")
-    gate, tts = make_access_control(mode=SECURITY_MODE_PASSPHRASE, passphrase_store=store, stt_texts=["hulk"])
+    gate, _ = make_access_control(mode=SECURITY_MODE_PASSPHRASE, passphrase_store=store, stt_texts=["hulk"])
     assert gate.authorize() is False
 
 
 def test_passphrase_falls_back_to_configured_default():
-    gate, tts = make_access_control(
+    gate, _ = make_access_control(
         mode=SECURITY_MODE_PASSPHRASE, passphrase="Avengers", stt_texts=["avengers"]
     )
     assert gate.authorize() is True
 
 
 def test_both_mode_grants_via_voice():
-    gate, tts = make_access_control(mode=SECURITY_MODE_BOTH, verifier=FakeSpeakerVerifier(score=0.95))
+    gate, _ = make_access_control(mode=SECURITY_MODE_BOTH, verifier=FakeSpeakerVerifier(score=0.95))
     assert gate.authorize() is True
 
 
@@ -100,7 +99,7 @@ def test_both_mode_falls_back_to_passphrase():
 
 def test_both_mode_denies_when_both_fail():
     store = FakePassphraseStore(passphrase="winter soldier")
-    gate, tts = make_access_control(
+    gate, _ = make_access_control(
         mode=SECURITY_MODE_BOTH,
         verifier=FakeSpeakerVerifier(score=0.1),
         passphrase_store=store,

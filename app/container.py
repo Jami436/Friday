@@ -1,7 +1,6 @@
 """Composition root: the only place that wires domain ports to infrastructure adapters."""
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from app.application.access_control import AccessControlService
 from app.application.assistant_service import AssistantService
@@ -9,7 +8,8 @@ from app.application.briefing_service import BriefingService
 from app.application.conversation_service import ConversationService
 from app.application.memory_extractor import MemoryExtractor
 from app.application.reminder_service import ReminderService
-from app.core.config import Settings, settings as default_settings
+from app.core.config import Settings
+from app.core.config import settings as default_settings
 from app.core.constants import (
     AI_PROVIDER_GEMINI,
     AI_PROVIDER_LOCAL,
@@ -33,6 +33,7 @@ from app.infrastructure.audio.clap_detector import ClapDetector
 from app.infrastructure.audio.sounddevice_audio import SounddeviceAudioOutput, SounddeviceMicrophone
 from app.infrastructure.audio.vad import SounddeviceVoiceActivityDetector
 from app.infrastructure.audio.wake_engine import SounddeviceWakeEngine
+from app.infrastructure.email.caching_email import CachedEmailProvider
 from app.infrastructure.email.gmail_imap import GmailImapAdapter
 from app.infrastructure.persistence.json_store import JsonMemoryStore
 from app.infrastructure.persistence.sqlite_store import SqliteMemoryStore
@@ -98,6 +99,9 @@ def _build_tts(settings: Settings, audio_output: AudioOutput) -> TextToSpeech:
             api_key=settings.elevenlabs_api_key,
             audio_output=audio_output,
             voice_id=settings.elevenlabs_voice_id,
+            stability=settings.elevenlabs_stability,
+            similarity_boost=settings.elevenlabs_similarity_boost,
+            max_retries=settings.elevenlabs_max_retries,
         )
     try:
         return SystemSpeechTextToSpeech()
@@ -107,11 +111,15 @@ def _build_tts(settings: Settings, audio_output: AudioOutput) -> TextToSpeech:
 
 
 def _build_wake_engine(settings: Settings) -> WakeEngine:
-    stream_factory: Callable[[], AudioStream] = lambda: SounddeviceMicrophone(settings.audio_input_device)
-    clap_factory: Callable[[], WakeDetector] = lambda: ClapDetector(
-        min_count=settings.wake_clap_min_count,
-        window_sec=settings.wake_clap_window_sec,
-    )
+    def stream_factory() -> AudioStream:
+        return SounddeviceMicrophone(settings.audio_input_device)
+
+    def clap_factory() -> WakeDetector:
+        return ClapDetector(
+            min_count=settings.wake_clap_min_count,
+            window_sec=settings.wake_clap_window_sec,
+        )
+
     return SounddeviceWakeEngine(
         stream_factory=stream_factory,
         clap_detector_factory=clap_factory,
@@ -133,7 +141,7 @@ def build_container(settings: Settings | None = None, **overrides) -> Container:
         "lifecycle": ApplicationLifecycle(),
         "ai": _build_ai(config),
         "store": _build_store(config),
-        "email": GmailImapAdapter(user=config.gmail_user, app_password=config.gmail_app_password),
+        "email": CachedEmailProvider(GmailImapAdapter(user=config.gmail_user, app_password=config.gmail_app_password)),
         "audio_output": SounddeviceAudioOutput(device=config.audio_output_device),
         "stt": VoskSpeechToText(),
         "vad": SounddeviceVoiceActivityDetector(
@@ -167,6 +175,7 @@ def build_container(settings: Settings | None = None, **overrides) -> Container:
         stt=components["stt"],
         vad=components["vad"],
         clock=components["clock"],
+        wake_engine=components["wake_engine"],
     )
     components["verifier"] = VoskSpeakerVerifier()
     components["passphrase_store"] = FilePassphraseStore()

@@ -11,14 +11,32 @@ from app.domain.services.clock import SystemClock
 EXTRACTOR_PROMPT = """You are a strict structured-data extractor. Today's date is {today}.
 
 Read the user's request and detect ONLY explicit asks to:
-- set or add a deadline / reminder / "remind me"  -> type "deadline", fields: title (str), due (YYYY-MM-DD or null if not given), time (HH:MM or null)
-- add a task / to-do / "put it on my list"        -> type "task", field: title
-- remember / note something                       -> type "note", field: text
+- set or add a deadline / reminder / "remind me"
+  -> type "deadline", fields: title (str),
+     due (YYYY-MM-DD or null if not given), time (HH:MM or null)
+- add a task / to-do / "put it on my list"
+  -> type "task", field: title
+- remember / note something
+  -> type "note", field: text
+- mark a task or deadline as done / complete
+  -> type "complete", fields: target ("task" or "deadline"), title (str)
+- remove / delete a task or deadline / "cancel"
+  -> type "delete", fields: target ("task" or "deadline"), title (str)
+- show / list my tasks or deadlines / "what's on my list"
+  -> type "list", field: target ("task", "deadline", or null for both)
+- move / reschedule a deadline
+  -> type "reschedule", fields: title (str),
+     due (YYYY-MM-DD or null if not given), time (HH:MM or null)
 
 Rules:
-- If a date is given relative to today (e.g. "tomorrow", "next monday", "in 3 days"), resolve it to an absolute YYYY-MM-DD using today's date.
-- Do NOT extract requests to read, list, summarize or cancel things.
-- Return ONLY a JSON array of actions, or [] if nothing qualifies. No prose, no markdown fences.
+- If a date is given relative to today (e.g. "tomorrow", "next monday",
+  "in 3 days"), resolve it to an absolute YYYY-MM-DD using today's date.
+- Do NOT extract requests to read, summarize or answer questions
+  (unless they are a "list" request).
+- For "complete", "delete", "reschedule", match the title to an existing
+  task/deadline if possible; if the exact title is unknown, approximate it.
+- Return ONLY a JSON array of actions, or [] if nothing qualifies.
+  No prose, no markdown fences.
 """
 
 # Cheap pre-filter: if the request contains none of these cues, we skip the
@@ -49,6 +67,25 @@ _ACTION_HINTS = (
     "jot",
     "save",
     "record",
+    # mutation / listing verbs
+    "complete",
+    "mark",
+    "done",
+    "finish",
+    "delete",
+    "remove",
+    "cancel",
+    "reschedule",
+    "move",
+    "push",
+    "list",
+    "show",
+    "what's on my",
+    "what do i have",
+    "my tasks",
+    "my deadlines",
+    "my list",
+    "what's due",
     # date/time references (implicit deadlines like "call mom tomorrow")
     "tomorrow",
     "tonight",
@@ -101,7 +138,7 @@ class MemoryExtractor:
     def _should_extract(self, user_text: str) -> bool:
         return bool(_HINT_RE.search(user_text))
 
-    def extract(self, user_text: str) -> list[dict]:
+    def extract(self, user_text: str) -> list[dict[str, str]]:
         if not self._should_extract(user_text):
             return []
         today: date = self._clock.now().date()

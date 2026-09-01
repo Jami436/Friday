@@ -4,7 +4,6 @@ from loguru import logger
 
 from app.core.config import settings
 
-
 logger.remove()
 
 logger.add(
@@ -17,3 +16,5 @@ logger.add(
         "- <level>{message}</level>"
     )
 )
+
+__all__ = ["logger"]

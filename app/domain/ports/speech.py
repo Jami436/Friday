@@ -1,5 +1,6 @@
 """Ports for the voice pipeline: wake, VAD, STT and TTS."""
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 import numpy as np
 
@@ -31,6 +32,10 @@ class TextToSpeech(Protocol):
 
     def speak(self, text: str) -> None: ...
 
+    def cancel(self) -> None:
+        """Best-effort immediate stop of any in-flight ``speak`` call."""
+        ...
+
 
 class WakeEngine(Protocol):
     """Blocks until woken, returning the wake reason ('clap' | 'keyword')."""
@@ -40,3 +45,7 @@ class WakeEngine(Protocol):
         idle_hook: Callable[[], None] | None = None,
         idle_interval: float = 60.0,
     ) -> str: ...
+
+    def close(self) -> None:
+        """Best-effort request to stop any in-flight ``wait_for_wake``."""
+        ...

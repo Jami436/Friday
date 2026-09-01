@@ -41,10 +41,8 @@ class SounddeviceVoiceActivityDetector(VoiceActivityDetector):
             noise_floor = 200.0
             active = False
             silence_blocks = 0
-            blocks_seen = 0
 
-            for block in mic.read_blocks():
-                blocks_seen += 1
+            for blocks_seen, block in enumerate(mic.read_blocks(), start=1):
                 rms_value = _rms(block)
                 threshold = max(noise_floor * 3.0, 500.0)
 

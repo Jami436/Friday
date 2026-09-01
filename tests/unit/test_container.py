@@ -4,7 +4,7 @@ import pytest
 from app.container import build_container
 from app.core.config import Settings
 from app.infrastructure.persistence.sqlite_store import SqliteMemoryStore
-from tests.fakes import FakeAIProvider, FakeClock, FakeEmailProvider, FakeSTT, FakeTTS, FakeVAD, FakeWakeEngine
+from tests.fakes import FakeAIProvider, FakeEmailProvider, FakeSTT, FakeTTS, FakeVAD, FakeWakeEngine
 
 
 @pytest.fixture

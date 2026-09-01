@@ -20,4 +20,6 @@ class VoskSpeechToText(SpeechToText):
             return ""
         self._recognizer.AcceptWaveform(audio.tobytes())
         result = json.loads(self._recognizer.FinalResult())
-        return result.get("text", "").strip()
+        text = result.get("text", "").strip()
+        self._recognizer.Reset()  # fresh state per utterance; avoids cross-turn bleed
+        return text

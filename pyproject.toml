@@ -1,0 +1,128 @@
+[project]
+name = "friday"
+version = "0.1.0"
+description = "FRIDAY — an always-on, voice-controlled, AI-powered personal assistant"
+requires-python = ">=3.13"
+dependencies = [
+    "elevenlabs>=2.60.0",
+    "google-genai>=2.14.0",
+    "loguru>=0.7.3",
+    "numpy>=2.5.1",
+    "pydantic-settings>=2.14.2",
+    "sounddevice>=0.5.5",
+    "tenacity>=9.1.4",
+    "vosk>=0.3.45",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=26.5.1",
+    "isort>=8.0.1",
+    "mypy>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.0",
+    "pywin32>=312",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.black]
+line-length = 120
+target-version = ["py313"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["app", "tests"]
+default_section = "THIRDPARTY"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "BLE",    # flake8-blind-except
+    "SIM",    # flake8-simplify
+    "PLC",    # pylint convention
+    "RUF",    # ruff-specific
+]
+ignore = [
+    "SIM108",  # allow if/else assignment style
+    "PLC0415", # allow deferred imports (used for optional heavy deps)
+]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+explicit_package_bases = true
+mypy_path = "."
+warn_unused_ignores = true
+show_error_codes = true
+
+# The composition-root builds services from a heterogeneous components dict;
+# this dynamic assembly is intentionally excluded from strict checking.
+[[tool.mypy.overrides]]
+module = ["app.container"]
+disallow_untyped_defs = false
+disable_error_code = ["arg-type", "type-arg", "assignment", "no-untyped-def"]
+
+# Vendor-facing adapters wrap untyped third-party SDKs (Vosk, imaplib, ElevenLabs,
+# Gemini); their Any-filled boundaries are intentional and excluded from strict checks.
+[[tool.mypy.overrides]]
+module = [
+    "app.infrastructure.speech.vosk_model",
+    "app.infrastructure.speech.vosk_stt",
+    "app.infrastructure.speech.vosk_keyword",
+    "app.infrastructure.speech.elevenlabs_tts",
+    "app.infrastructure.audio.vad",
+    "app.infrastructure.audio.clap_detector",
+    "app.infrastructure.audio.wake_engine",
+    "app.infrastructure.audio.sounddevice_audio",
+    "app.infrastructure.security.passphrase_store",
+    "app.infrastructure.security.vosk_speaker",
+    "app.infrastructure.email.gmail_imap",
+    "app.infrastructure.ai.gemini_adapter",
+    "app.infrastructure.persistence.json_store",
+    "app.core.config",
+]
+disable_error_code = [
+    "no-any-return",
+    "no-untyped-call",
+    "no-untyped-def",
+    "attr-defined",
+    "arg-type",
+    "type-arg",
+    "assignment",
+    "return",
+]
+
+[[tool.mypy.overrides]]
+module = ["vosk", "sounddevice", "elevenlabs", "win32com.*"]
+ignore_missing_imports = true

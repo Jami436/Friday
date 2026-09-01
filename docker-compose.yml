@@ -1,0 +1,14 @@
+# FRIDAY container orchestration (headless / CI only - see Dockerfile note).
+# Desktop voice features need host audio and are not available in Docker.
+services:
+  friday:
+    build: .
+    image: friday:latest
+    environment:
+      - MEMORY_BACKEND=sqlite
+      - AI_PROVIDER=gemini
+      - LOG_LEVEL=INFO
+      - DEBUG=False
+    volumes:
+      - ./data:/srv/friday/data
+    command: ["python", "-m", "pytest", "-q"]

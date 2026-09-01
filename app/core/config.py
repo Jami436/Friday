@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
+    elevenlabs_stability: float | None = None
+    elevenlabs_similarity_boost: float | None = None
+    elevenlabs_max_retries: int = 3
 
     gmail_user: str = ""
     gmail_app_password: str = ""

@@ -95,6 +95,43 @@ class SqliteMemoryStore(MemoryStore):
             ).fetchall()
             return [Task(id=r["id"], title=r["title"], done=bool(r["done"]), created=r["created"]) for r in rows]
 
+    def complete_task(self, task_id: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE tasks SET done = 1 WHERE id = ? AND done = 0", (task_id,)
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def delete_task(self, task_id: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def complete_deadline(self, deadline_id: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE deadlines SET done = 1 WHERE id = ? AND done = 0", (deadline_id,)
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def delete_deadline(self, deadline_id: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM deadlines WHERE id = ?", (deadline_id,))
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def reschedule_deadline(self, deadline_id: str, due_date: str, due_time: str = "") -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE deadlines SET due = ?, time = ?, notified = 0 WHERE id = ?",
+                (due_date, due_time, deadline_id),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
     # ---- deadlines ----
 
     def add_deadline(self, title: str, due_date: str, due_time: str = "") -> Deadline:
