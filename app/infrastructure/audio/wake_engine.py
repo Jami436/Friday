@@ -30,6 +30,7 @@ class SounddeviceWakeEngine(WakeEngine):
         idle_hook: Callable[[], None] | None = None,
         idle_interval: float = 60.0,
     ) -> str:
+        self._stop_event.clear()
         stream = self._stream_factory().__enter__()
         clap = self._clap_factory()
         keyword = self._keyword_factory()
@@ -51,3 +52,5 @@ class SounddeviceWakeEngine(WakeEngine):
                     return "keyword"
         finally:
             stream.close()
+
+        return ""

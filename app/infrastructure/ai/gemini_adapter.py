@@ -19,17 +19,22 @@ class GeminiAdapter(AIProvider):
             for message in history
         ]
 
-    def generate_response(self, prompt: str) -> str:
+    def _response_text(self, model: str, contents, config: dict | None = None) -> str:
+        """Generate content and wrap any failure in an AIProviderError."""
         try:
             response = self._client.models.generate_content(
-                model=self._model,
-                contents=prompt,
+                model=model, contents=contents, config=config
             )
         except errors.APIError as error:
             raise AIProviderError(
-                f"Gemini API error (status={error.status}): {error.message}"
+                f"Gemini API error (status={getattr(error, 'status', 'unknown')}): {error.message}"
             ) from error
+        except Exception as error:  # surface network/other SDK failures
+            raise AIProviderError(f"Gemini request failed: {error}") from error
         return response.text or ""
+
+    def generate_response(self, prompt: str) -> str:
+        return self._response_text(self._model, prompt)
 
     def chat(
         self,
@@ -42,14 +47,4 @@ class GeminiAdapter(AIProvider):
             config["system_instruction"] = system_instruction
         if temperature is not None:
             config["temperature"] = temperature
-        try:
-            response = self._client.models.generate_content(
-                model=self._model,
-                contents=self._to_wire(history),
-                config=config,
-            )
-        except errors.APIError as error:
-            raise AIProviderError(
-                f"Gemini API error (status={error.status}): {error.message}"
-            ) from error
-        return response.text or ""
+        return self._response_text(self._model, self._to_wire(history), config)

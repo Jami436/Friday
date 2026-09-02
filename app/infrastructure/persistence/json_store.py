@@ -71,7 +71,10 @@ class JsonMemoryStore(MemoryStore):
 
     def delete_task(self, task_id: str) -> bool:
         with self._lock:
+            before = len(self._data["tasks"])
             self._data["tasks"] = [t for t in self._data["tasks"] if t["id"] != task_id]
+            if len(self._data["tasks"]) == before:
+                return False
             self._save()
             return True
 
@@ -86,7 +89,10 @@ class JsonMemoryStore(MemoryStore):
 
     def delete_deadline(self, deadline_id: str) -> bool:
         with self._lock:
+            before = len(self._data["deadlines"])
             self._data["deadlines"] = [d for d in self._data["deadlines"] if d["id"] != deadline_id]
+            if len(self._data["deadlines"]) == before:
+                return False
             self._save()
             return True
 

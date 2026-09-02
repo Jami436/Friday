@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     def _validate_gemini_api_key(self) -> "Settings":
         key = self.gemini_api_key.strip()
 
+        if self.ai_provider.strip().lower() != "gemini":
+            return self
+
         if not key:
             raise ConfigurationError(
                 "GEMINI_API_KEY is not set. "

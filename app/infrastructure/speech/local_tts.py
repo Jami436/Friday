@@ -35,7 +35,10 @@ class SystemSpeechTextToSpeech(TextToSpeech):
     def speak(self, text: str) -> None:
         if not text.strip():
             return
-        self._engine.Speak(text)
+        # SVSFlagsAsync (1): return immediately and stream speech on a background
+        # thread so that cancel() can interrupt playback mid-utterance.
+        self._engine.Speak(text, 1)
 
     def cancel(self) -> None:
-        self._engine.Speak("", 3)  # SVSFlagsAsync | SVPurgeBeforeSpeak
+        # SVSFlagsAsync | SVPurgeBeforeSpeak: stop speech and drop any queued text.
+        self._engine.Speak("", 3)

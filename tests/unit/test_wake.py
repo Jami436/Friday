@@ -1,6 +1,10 @@
+import threading
+import time
+
 import numpy as np
 
 from app.infrastructure.audio.clap_detector import ClapDetector
+from app.infrastructure.audio.wake_engine import SounddeviceWakeEngine
 
 
 class FakeClock:
@@ -53,3 +57,66 @@ def test_claps_outside_window_do_not_trigger():
     det = ClapDetector(clock=FakeClock())
     blocks = _quiet(rng) * 20 + [_loud(rng)] + _quiet(rng) * 30 + [_loud(rng)] + _quiet(rng) * 30
     assert not any(det.feed(b) for b in blocks)
+
+
+class _FakeStream:
+    """A controllable infinite stream that emits blocks until signalled to stop."""
+
+    def __init__(self, blocks):
+        self._blocks = list(blocks)
+        self._stop = False
+        self.closes = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def read_blocks(self):
+        while not self._stop:
+            for block in self._blocks:
+                if self._stop:
+                    return
+                yield block
+
+    def close(self):
+        self.closes += 1
+        self._stop = True
+
+
+class _NeverDetect:
+    def feed(self, block):
+        return False
+
+
+def test_wake_engine_reenables_after_close():
+    """After close() (used to stop a conversation's interrupt monitor), the next
+    wait_for_wake must block normally again instead of returning immediately."""
+    quiet = (np.zeros(1600, dtype=np.int16),)
+    engine = SounddeviceWakeEngine(
+        stream_factory=lambda: _FakeStream(quiet),
+        clap_detector_factory=lambda: _NeverDetect(),
+        keyword_spotter_factory=lambda: _NeverDetect(),
+    )
+
+    def _blocking_wait():
+        return engine.wait_for_wake(idle_interval=60.0)
+
+    first_result = []
+    first = threading.Thread(target=lambda: first_result.append(_blocking_wait()))
+    first.start()
+    time.sleep(0.05)
+    engine.close()  # signal the first wait to exit
+    first.join(timeout=1.0)
+    assert first_result == [""]
+
+    # The next wait must block again (the stop event was cleared by the fix);
+    # if it returned immediately the whole idle loop would spin.
+    second = threading.Thread(target=_blocking_wait)
+    second.start()
+    time.sleep(0.1)
+    assert second.is_alive()  # still blocking = wake detection is active
+    engine.close()  # unblock so the thread can end
+    second.join(timeout=1.0)
+    assert not second.is_alive()
